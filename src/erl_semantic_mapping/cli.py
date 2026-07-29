@@ -105,9 +105,14 @@ def check_cmd(
         console.print(f"[{style}]{check}[/{style}]")
         lines.append(f"- {'✅' if check.passed else '❌'} **{check.name}** — {check.detail}")
 
-    markdown = "\n".join(lines) + "\n\n" + render_markdown(list(results.values()), "Sweep")
-    _write(RESULTS / "checks.md", markdown)
-    _append_step_summary(markdown)
+    verdicts = "\n".join(lines) + "\n"
+    # The file keeps the matrix for anyone reading the artifact on its own; the
+    # step summary gets verdicts only, because `sweep` has already posted the
+    # matrix and a job summary that repeats itself is a job summary nobody reads.
+    _write(
+        RESULTS / "checks.md", verdicts + "\n" + render_markdown(list(results.values()), "Sweep")
+    )
+    _append_step_summary(verdicts)
 
     failed = [c for c in checks if not c.passed]
     if failed:

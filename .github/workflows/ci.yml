@@ -109,13 +109,15 @@ jobs:
             --scene conf/scenes/room_v1.yaml --fusion bayes --tag candidate
           erl-map compare baselines/room_v1.json results/candidate.json --tolerance 0.02
 
-      - name: Metrics
-        if: always()
+      # The steps above post their own metrics to the job summary as they run.
+      # This only fires when one of them did not get that far.
+      - name: Report a failure the earlier steps could not
+        if: failure()
         run: |
           {
-            echo "## Eval — \`${GITHUB_SHA:0:7}\`"
+            echo "## Eval failed — \`${GITHUB_SHA:0:7}\`"
             echo
-            cat results/checks.md 2>/dev/null || echo "_the sweep did not complete_"
+            cat results/checks.md 2>/dev/null || echo "_no metrics were produced_"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
@@ -158,7 +160,6 @@ jobs:
           {
             echo "## Container"
             echo
-            echo '`docker run --rm erl-semantic-mapping` reproduced the gate.'
-            echo
-            cat out/sweep.md 2>/dev/null || true
+            echo '`docker run --rm erl-semantic-mapping` reproduced the gate on a'
+            echo 'digest-pinned base from a hash-locked environment.'
           } >> "$GITHUB_STEP_SUMMARY"
