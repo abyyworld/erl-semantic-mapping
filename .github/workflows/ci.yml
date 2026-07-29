@@ -1,0 +1,164 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # Pinned to the version in requirements-dev.lock: a ruff minor release
+      # should not be able to turn a green branch red without a commit.
+      - run: pip install ruff==0.16.0
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: |
+          pip install --upgrade pip
+          pip install -e '.[dev]'
+      - run: pytest -q --cov=erl_semantic_mapping --cov-report=term-missing
+
+  locked:
+    # The locks are what make the container and CI reproducible. If they drift
+    # out of sync with pyproject.toml, everything downstream is a guess.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the exact locked environment
+        run: |
+          pip install --upgrade pip
+          pip install --require-hashes --no-deps -r requirements-dev.lock
+          pip install --no-deps -e .
+
+      - run: pytest -q
+
+      - name: The locks must still resolve pyproject.toml
+        run: |
+          pip install pip-tools
+          for extra in "" "--extra dev"; do
+            out=$([ -z "$extra" ] && echo requirements.lock || echo requirements-dev.lock)
+            pip-compile --quiet --generate-hashes --strip-extras $extra -o "/tmp/$out" pyproject.toml
+            if ! diff -q <(grep -vE '^\s*#' "$out") <(grep -vE '^\s*#' "/tmp/$out") >/dev/null; then
+              echo "::error file=$out::$out is stale — run 'make lock' and commit the result"
+              diff <(grep -vE '^\s*#' "$out") <(grep -vE '^\s*#' "/tmp/$out") || true
+              exit 1
+            fi
+            echo "$out is current"
+          done
+
+  eval:
+    # The job this repo exists for. It rebuilds every published number from
+    # scratch, fails if the benchmark has stopped discriminating, and fails if
+    # the headline finding no longer reproduces. Nothing here is quoted from a
+    # README — it is all re-derived on this commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: |
+          pip install --upgrade pip
+          pip install --require-hashes --no-deps -r requirements.lock
+          pip install --no-deps -e .
+
+      - name: Sweep the detector x fusion matrix
+        # Writes the metrics table straight into the job summary.
+        run: erl-map sweep --scene conf/scenes/room_v1.yaml
+
+      - name: Suite sanity and the headline finding
+        run: erl-map check --scene conf/scenes/room_v1.yaml
+
+      - name: Regression gate against the committed baseline
+        # baselines/room_v1.json is the reference map quality for this scene,
+        # kept out of results/ precisely so that `make clean` cannot delete the
+        # thing every future run is measured against. Losing more than 0.02 mIoU
+        # has to be an explicit commit to a new baseline, not a quiet slide.
+        run: |
+          erl-map run independent:0.7 \
+            --scene conf/scenes/room_v1.yaml --fusion bayes --tag candidate
+          erl-map compare baselines/room_v1.json results/candidate.json --tolerance 0.02
+
+      - name: Metrics
+        if: always()
+        run: |
+          {
+            echo "## Eval — \`${GITHUB_SHA:0:7}\`"
+            echo
+            cat results/checks.md 2>/dev/null || echo "_the sweep did not complete_"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: results/
+          retention-days: 14
+
+  container:
+    # "One command runs it anywhere" is a claim, so it gets tested. The image
+    # runs the same gate as the `eval` job, from a hash-locked environment on a
+    # digest-pinned base.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: erl-semantic-mapping:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: The image runs the gate with no arguments
+        run: docker run --rm erl-semantic-mapping:ci
+
+      - name: The image writes results to a mounted volume
+        run: |
+          mkdir -p out
+          docker run --rm -v "$PWD/out:/work/results" erl-semantic-mapping:ci \
+            sweep --scene conf/scenes/room_v1.yaml
+          test -s out/sweep.json
+
+      - name: Container metrics
+        if: always()
+        run: |
+          {
+            echo "## Container"
+            echo
+            echo '`docker run --rm erl-semantic-mapping` reproduced the gate.'
+            echo
+            cat out/sweep.md 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY"

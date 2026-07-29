@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "erl-semantic-mapping"
+version = "0.1.0"
+description = "Semantic occupancy mapping with an evaluation harness that gates on its own assumptions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "abyyworld" }]
+keywords = ["robotics", "semantic-mapping", "slam", "occupancy-grid", "sensor-fusion", "evaluation"]
+
+# Deliberately light. Scene generation, ray casting, fusion and every metric run
+# on numpy alone, so a fresh clone, a CI job and a container image all take
+# seconds rather than minutes and nothing here needs a GPU.
+dependencies = [
+    "numpy>=1.24",
+    "pydantic>=2.5",
+    "typer>=0.9",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.3"]
+
+[project.scripts]
+erl-map = "erl_semantic_mapping.cli:app"
+
+[project.urls]
+Repository = "https://github.com/abyyworld/erl-semantic-mapping"
+Upstream = "https://github.com/abyyworld/erl-vla-evals"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

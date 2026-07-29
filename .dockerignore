@@ -1,0 +1,17 @@
+# Keep the build context to source, packaging metadata and the locks.
+.git
+.github
+.venv
+venv
+results
+docs
+tests
+*.egg-info
+__pycache__
+.pytest_cache
+.ruff_cache
+.coverage
+.DS_Store
+Makefile
+Dockerfile
+.dockerignore

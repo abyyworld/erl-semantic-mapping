@@ -1,0 +1,44 @@
+{
+  "tag": "baseline",
+  "config": {
+    "detector": "independent:0.7",
+    "fusion": "bayes",
+    "assumed_accuracy": 0.7,
+    "seed": 0,
+    "grid": [
+      64,
+      64,
+      24
+    ],
+    "voxel_size": 0.1,
+    "n_objects": 10,
+    "n_waypoints": 12,
+    "yaws_per_waypoint": 4,
+    "orbit_radius": 2.0,
+    "camera_height": 1.2,
+    "image_width": 48,
+    "image_height": 36,
+    "hfov_deg": 90.0,
+    "max_range": 8.0
+  },
+  "metrics": {
+    "semantic_miou": 0.559535847495148,
+    "semantic_miou_observed": 0.7691100665490768,
+    "per_class_iou": {
+      "floor": 0.7937264742785446,
+      "wall": 0.9258654474199869,
+      "table": 0.42567567567567566,
+      "chair": 0.3844884488448845,
+      "shelf": 0.45265588914549654,
+      "box": 0.37480314960629924
+    },
+    "occupancy_iou": 0.8718382539548262,
+    "coverage": 0.8718382539548262,
+    "ece": 0.028194376354990242,
+    "mean_confidence": 0.9210124936548854,
+    "frame_accuracy": 0.6993861091133258,
+    "n_observations": 77864,
+    "n_frames": 48
+  },
+  "wall_seconds": 0.31903408298967406
+}
